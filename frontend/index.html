@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 뉴스 모아보기</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .news-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            padding: 1.5rem;
+        }
+        
+        .news-card {
+            background: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+        
+        .news-card:hover {
+            transform: translateY(-4px);
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 1rem;
+        }
+        
+        .pagination button {
+            padding: 0.5rem 1rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.25rem;
+            background: white;
+            cursor: pointer;
+        }
+        
+        .pagination button.active {
+            background: #4299e1;
+            color: white;
+        }
+        
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .shutdown-button {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            padding: 0.75rem 1.5rem;
+            background-color: #ef4444;
+            color: white;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .shutdown-button:hover {
+            background-color: #dc2626;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        @media (max-width: 768px) {
+            .news-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 640px) {
+            .news-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold mb-8 text-center">AI 뉴스 모아보기</h1>
+        
+        <div class="news-grid" id="newsGrid"></div>
+        
+        <div class="pagination" id="pagination"></div>
+    </div>
+
+    <button class="shutdown-button" onclick="shutdownServer()">서버 종료</button>
+
+    <script>
+        let currentPage = 1;
+        let totalPages = 1;
+        
+        async function fetchNews(page = 1) {
+            try {
+                const response = await fetch(`/api/news?page=${page}&per_page=9`);
+                const data = await response.json();
+                
+                totalPages = data.total_pages;
+                currentPage = data.page;
+                
+                displayNews(data.articles);
+                updatePagination();
+            } catch (error) {
+                console.error('Error fetching news:', error);
+            }
+        }
+        
+        function displayNews(articles) {
+            const grid = document.getElementById('newsGrid');
+            grid.innerHTML = '';
+            
+            articles.forEach(article => {
+                const date = new Date(article.date);
+                const formattedDate = new Intl.DateTimeFormat('ko-KR', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }).format(date);
+                
+                const card = document.createElement('div');
+                card.className = 'news-card p-4';
+                card.innerHTML = `
+                    <a href="${article.url}" target="_blank" class="block">
+                        <h2 class="text-xl font-semibold mb-2 hover:text-blue-600">${article.title}</h2>
+                        <p class="text-gray-600 text-sm mb-2">${article.source} | ${formattedDate}</p>
+                        <p class="text-gray-700">${article.summary.slice(0, 100)}${article.summary.length > 100 ? '...' : ''}</p>
+                    </a>
+                `;
+                grid.appendChild(card);
+            });
+        }
+        
+        function updatePagination() {
+            const pagination = document.getElementById('pagination');
+            pagination.innerHTML = '';
+            
+            // 이전 페이지 버튼
+            const prevButton = document.createElement('button');
+            prevButton.textContent = '이전';
+            prevButton.disabled = currentPage === 1;
+            prevButton.onclick = () => fetchNews(currentPage - 1);
+            pagination.appendChild(prevButton);
+            
+            // 페이지 번호 버튼들
+            for (let i = 1; i <= totalPages; i++) {
+                const pageButton = document.createElement('button');
+                pageButton.textContent = i;
+                pageButton.className = i === currentPage ? 'active' : '';
+                pageButton.onclick = () => fetchNews(i);
+                pagination.appendChild(pageButton);
+            }
+            
+            // 다음 페이지 버튼
+            const nextButton = document.createElement('button');
+            nextButton.textContent = '다음';
+            nextButton.disabled = currentPage === totalPages;
+            nextButton.onclick = () => fetchNews(currentPage + 1);
+            pagination.appendChild(nextButton);
+        }
+
+        async function shutdownServer() {
+            if (confirm('서버를 종료하시겠습니까?')) {
+                try {
+                    await fetch('/api/shutdown', { method: 'POST' });
+                    alert('서버가 종료되었습니다.');
+                    window.close();
+                } catch (error) {
+                    console.error('Error shutting down server:', error);
+                    alert('서버 종료 중 오류가 발생했습니다.');
+                }
+            }
+        }
+        
+        // 초기 뉴스 로드
+        fetchNews();
+        
+        // 5분마다 새로운 뉴스 확인
+        setInterval(() => fetchNews(currentPage), 300000);
+    </script>
+</body>
+</html> 
